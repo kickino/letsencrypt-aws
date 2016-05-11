@@ -170,7 +170,7 @@ An example IAM policy is:
 ### Cross-Account handling
 You will need this feature, if Route53 is managed through your main account and ELB are provisioned in a separate AWS account.
 
-[AWS Examples of Policies for Delegating Access](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create_policy-examples.html)
+Useful documentations: [AWS Examples of Policies for Delegating Access](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create_policy-examples.html) and
 [AWS Tutorial: Delegate Access Across AWS Accounts Using IAM Roles](https://docs.aws.amazon.com/IAM/latest/UserGuide/tutorial_cross-account-with-roles.html)
 
 In your account, which includes the ELB, you should  create a new policy:
@@ -207,7 +207,7 @@ In your account, which includes the ELB, you should  create a new policy:
 ```
 After this, you need to create a new `Role for Cross-Account Access`.
 Enter your Account ID from your main account and choose the policy you've just created.
-Edit the `Trust Relationships` and replace `"AWS": "arn:aws:iam::yourmainaccountnumber:root"` with
+Edit the `Trust Relationships` and replace `arn:aws:iam::yourmainaccountnumber:root` with
 `arn:aws:iam::yourmainaccountnumber:user/youruser`
 
 In your main account, add a new policy to your user:
