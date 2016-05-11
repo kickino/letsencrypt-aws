@@ -166,3 +166,68 @@ An example IAM policy is:
     ]
 }
 ```
+
+### Cross-Account handling
+You will need this feature, if Route53 is managed through your main account and ELB are provisioned in a separate AWS account.
+
+[AWS Examples of Policies for Delegating Access](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create_policy-examples.html)
+[AWS Tutorial: Delegate Access Across AWS Accounts Using IAM Roles](https://docs.aws.amazon.com/IAM/latest/UserGuide/tutorial_cross-account-with-roles.html)
+
+In your account, which includes the ELB, you should  create a new policy:
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "",
+            "Effect": "Allow",
+            "Action": [
+                "elasticloadbalancing:DescribeLoadBalancers",
+                "elasticloadbalancing:SetLoadBalancerListenerSSLCertificate"
+            ],
+            "Resource": [
+                "*"
+            ]
+        },
+        {
+            "Sid": "",
+            "Effect": "Allow",
+            "Action": [
+                "iam:ListServerCertificates",
+                "iam:UploadServerCertificate",
+                "iam:DeleteServerCertificate",
+                "iam:GetServerCertificate"
+            ],
+            "Resource": [
+                "*"
+            ]
+        }
+    ]
+}
+```
+After this, you need to create a new `Role for Cross-Account Access`.
+Enter your Account ID from your main account and choose the policy you've just created.
+Edit the `Trust Relationships` and replace `"AWS": "arn:aws:iam::yourmainaccountnumber:root"` with
+`arn:aws:iam::yourmainaccountnumber:user/youruser`
+
+In your main account, add a new policy to your user:
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": {
+        "Effect": "Allow",
+        "Action": "sts:AssumeRole",
+        "Resource": "arn:aws:iam::yourELBaccountID:role/the-role-you-just-created"
+    }
+}
+```
+
+Add `.aws/config` to your boto3 installation with the content:
+```console
+[profile crossaccount-example]
+role_arn=arn:aws:iam::yourELBaccountID:role/the-role-you-just-created
+source_profile=default
+```
+
+Then you can simply run it: `python letsencrypt-aws.py update-certificates --cross-profile=crossaccount-example`.
+

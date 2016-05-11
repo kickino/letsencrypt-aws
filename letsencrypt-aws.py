@@ -467,7 +467,10 @@ def cli():
         "expiration."
     )
 )
-def update_certificates(persistent=False, force_issue=False):
+@click.option(
+    "--cross-profile", help="Specify your profile for ELB and IAM modifications."
+)
+def update_certificates(persistent=False, force_issue=False, cross_profile=False):
     logger = Logger()
     logger.emit("startup")
 
@@ -476,9 +479,14 @@ def update_certificates(persistent=False, force_issue=False):
 
     session = boto3.Session()
     s3_client = session.client("s3")
-    elb_client = session.client("elb")
     route53_client = session.client("route53")
-    iam_client = session.client("iam")
+    if cross_profile:
+        cross_session = boto3.Session(profile_name=cross_profile)
+        elb_client = cross_session.client("elb")
+        iam_client = cross_session.client("iam")
+    else:
+        elb_client = session.client("elb")
+        iam_client = session.client("iam")
 
     config = json.loads(os.environ["LETSENCRYPT_AWS_CONFIG"])
     domains = config["domains"]
