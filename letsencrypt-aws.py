@@ -120,19 +120,43 @@ class ELBCertificate(object):
 
 
 class Route53ChallengeCompleter(object):
-    def __init__(self, route53_client):
+    def __init__(self, route53_client, route53_cross_client=None):
         self.route53_client = route53_client
+        self.route53_cross_client = route53_cross_client
+
+    # return the session where the DNS zone is located
+    def _find_client_for_domain(self, domain):
+        if not self.route53_cross_client:
+            return self.route53_client
+
+        zones = []
+        for client in (self.route53_client, self.route53_cross_client):
+            paginator = client.get_paginator("list_hosted_zones")
+            for page in paginator.paginate():
+                for zone in page["HostedZones"]:
+                    if (
+                        domain.endswith(zone["Name"]) or
+                        (domain + ".").endswith(zone["Name"])
+                       ) and not zone["Config"]["PrivateZone"]:
+                           return client
+
+        raise ValueError(
+            "Unable to find a Route53 hosted zone for {}".format(domain)
+        )
 
     def _find_zone_id_for_domain(self, domain):
-        paginator = self.route53_client.get_paginator("list_hosted_zones")
         zones = []
-        for page in paginator.paginate():
-            for zone in page["HostedZones"]:
-                if (
-                    domain.endswith(zone["Name"]) or
-                    (domain + ".").endswith(zone["Name"])
-                ) and not zone["Config"]["PrivateZone"]:
-                    zones.append((zone["Name"], zone["Id"]))
+        for client in (self.route53_client, self.route53_cross_client):
+            if not client:
+                continue
+            paginator = client.get_paginator("list_hosted_zones")
+            for page in paginator.paginate():
+                for zone in page["HostedZones"]:
+                    if (
+                        domain.endswith(zone["Name"]) or
+                        (domain + ".").endswith(zone["Name"])
+                       ) and not zone["Config"]["PrivateZone"]:
+                           zones.append((zone["Name"], zone["Id"]))
 
         if not zones:
             raise ValueError(
@@ -147,7 +171,8 @@ class Route53ChallengeCompleter(object):
         return zones[0][1]
 
     def _change_txt_record(self, action, zone_id, domain, value):
-        response = self.route53_client.change_resource_record_sets(
+        client = self._find_client_for_domain(domain)
+        response = client.change_resource_record_sets(
             HostedZoneId=zone_id,
             ChangeBatch={
                 "Changes": [
@@ -188,11 +213,12 @@ class Route53ChallengeCompleter(object):
             value
         )
 
-    def wait_for_change(self, change_id):
+    def wait_for_change(self, change_id, host):
         _, change_id = change_id
+        client = self._find_client_for_domain(host)
 
         while True:
-            response = self.route53_client.get_change(Id=change_id)
+            response = client.get_change(Id=change_id)
             if response["ChangeInfo"]["Status"] == "INSYNC":
                 return
             time.sleep(5)
@@ -283,7 +309,7 @@ def complete_dns_challenge(logger, acme_client, dns_challenge_completer,
         "updating-elb.wait-for-route53",
         elb_name=elb_name, host=authz_record.host
     )
-    dns_challenge_completer.wait_for_change(authz_record.change_id)
+    dns_challenge_completer.wait_for_change(authz_record.change_id,authz_record.host)
 
     response = authz_record.dns_challenge.response(acme_client.key)
 
@@ -484,9 +510,11 @@ def update_certificates(persistent=False, force_issue=False, cross_profile=False
         cross_session = boto3.Session(profile_name=cross_profile)
         elb_client = cross_session.client("elb")
         iam_client = cross_session.client("iam")
+        route53_cross_client = cross_session.client("route53")
     else:
         elb_client = session.client("elb")
         iam_client = session.client("iam")
+        route53_cross_client = None
 
     config = json.loads(os.environ["LETSENCRYPT_AWS_CONFIG"])
     domains = config["domains"]
@@ -512,7 +540,7 @@ def update_certificates(persistent=False, force_issue=False, cross_profile=False
 
         certificate_requests.append(CertificateRequest(
             cert_location,
-            Route53ChallengeCompleter(route53_client),
+            Route53ChallengeCompleter(route53_client, route53_cross_client),
             domain["hosts"],
             domain.get("key_type", "rsa"),
         ))
