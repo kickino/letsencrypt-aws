@@ -129,7 +129,6 @@ class Route53ChallengeCompleter(object):
         if not self.route53_cross_client:
             return self.route53_client
 
-        zones = []
         for client in (self.route53_client, self.route53_cross_client):
             paginator = client.get_paginator("list_hosted_zones")
             for page in paginator.paginate():
@@ -138,7 +137,7 @@ class Route53ChallengeCompleter(object):
                         domain.endswith(zone["Name"]) or
                         (domain + ".").endswith(zone["Name"])
                        ) and not zone["Config"]["PrivateZone"]:
-                           return client
+                            return client
 
         raise ValueError(
             "Unable to find a Route53 hosted zone for {}".format(domain)
@@ -156,7 +155,7 @@ class Route53ChallengeCompleter(object):
                         domain.endswith(zone["Name"]) or
                         (domain + ".").endswith(zone["Name"])
                        ) and not zone["Config"]["PrivateZone"]:
-                           zones.append((zone["Name"], zone["Id"]))
+                            zones.append((zone["Name"], zone["Id"]))
 
         if not zones:
             raise ValueError(
@@ -309,7 +308,10 @@ def complete_dns_challenge(logger, acme_client, dns_challenge_completer,
         "updating-elb.wait-for-route53",
         elb_name=elb_name, host=authz_record.host
     )
-    dns_challenge_completer.wait_for_change(authz_record.change_id,authz_record.host)
+    dns_challenge_completer.wait_for_change(
+        authz_record.change_id, 
+        authz_record.host
+    )
 
     response = authz_record.dns_challenge.response(acme_client.key)
 
@@ -494,9 +496,13 @@ def cli():
     )
 )
 @click.option(
-    "--cross-profile", help="Specify your profile for ELB and IAM modifications."
+    "--cross-profile", help=(
+        "Specify your profile, if Route53 and ELB are in "
+        "different accounts located."
+    )
 )
-def update_certificates(persistent=False, force_issue=False, cross_profile=False):
+def update_certificates(persistent=False, force_issue=False,
+                        cross_profile=False):
     logger = Logger()
     logger.emit("startup")
 
