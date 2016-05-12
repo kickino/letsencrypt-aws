@@ -309,7 +309,7 @@ def complete_dns_challenge(logger, acme_client, dns_challenge_completer,
         elb_name=elb_name, host=authz_record.host
     )
     dns_challenge_completer.wait_for_change(
-        authz_record.change_id, 
+        authz_record.change_id,
         authz_record.host
     )
 
